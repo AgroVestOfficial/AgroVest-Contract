@@ -1,0 +1,13 @@
+# Default owners for everything in the repo
+*       @AgroVestOfficial/core-team
+
+# Contract-specific owners
+contracts/farm/         @AgroVestOfficial/contracts
+contracts/escrow/       @AgroVestOfficial/contracts
+contracts/investment/   @AgroVestOfficial/contracts
+contracts/dao/          @AgroVestOfficial/contracts
+
+# CI/CD
+.github/                @AgroVestOfficial/devops
+scripts/                @AgroVestOfficial/devops
+Makefile                @AgroVestOfficial/devops
