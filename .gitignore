@@ -1,14 +1,27 @@
-# Compiler files
-cache/
-out/
+# Rust / Soroban
+/target/
+*.wasm
+*.so
+*.dylib
+*.d
 
-# Ignores development broadcast logs
-!/broadcast
-/broadcast/*/31337/
-/broadcast/**/dry-run/
+# Build artifacts
+/cache/
+/out/
+/docs/
 
-# Docs
-docs/
-
-# Dotenv file
+# Environment
 .env
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Soroban
+.soroban/

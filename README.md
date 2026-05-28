@@ -1,66 +1,50 @@
-## Foundry
+# AgroVest Contracts
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+Stellar Soroban smart contracts for the AgroVest agricultural investment platform.
 
-Foundry consists of:
+## Contracts
 
--   **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
--   **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
--   **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
--   **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+- **Farm** — Marketplace for farmers to register businesses, list products, and for buyers to purchase and review
+- **FarmEscrow** — Escrow for buyer-farmer transactions with dispute resolution
+- **Investment** — Farm investment opportunities with time-locked funding
+- **DAO** — Governance with token locking, proposals, voting, delegation, challenges, and disputes
 
-## Documentation
+## Build
 
-https://book.getfoundry.sh/
+```bash
+# Install Soroban CLI
+cargo install --locked soroban-cli
 
-## Usage
-
-### Build
-
-```shell
-$ forge build
+# Build all contracts
+soroban contract build
 ```
 
-### Test
+## Test
 
-```shell
-$ forge test
+```bash
+cargo test --workspace
 ```
 
-### Format
+## Deploy
 
-```shell
-$ forge fmt
+```bash
+# Deploy to testnet
+./scripts/deploy.sh --network testnet --source <your-secret-key>
+
+# Or use Makefile
+make build
 ```
 
-### Gas Snapshots
+## Project Structure
 
-```shell
-$ forge snapshot
+```
+contracts/
+├── farm/          # Marketplace contract
+├── escrow/        # Escrow contract
+├── investment/    # Investment contract
+└── dao/           # DAO governance contract
 ```
 
-### Anvil
+## Token
 
-```shell
-$ anvil
-```
-
-### Deploy
-
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
-```
-
-### Cast
-
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+The AVT token uses Stellar's native Asset Contract (SAC). Create the asset on Stellar and pass the SAC contract address to downstream contracts during initialization.
