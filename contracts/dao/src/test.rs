@@ -1,137 +1,169 @@
-use soroban_sdk::{Address, Env, String};
 use soroban_sdk::testutils::Address as _;
+use soroban_sdk::token::{StellarAssetClient, TokenClient};
+use soroban_sdk::{Address, Env, String};
 
-use crate::{DaoContract, DaoContractClient};
 use crate::types::VoteData;
+use crate::{DaoContract, DaoContractClient};
 
-fn setup_env<'a>() -> (Env, DaoContractClient<'a>) {
+struct TestCtx<'a> {
+    env: Env,
+    token_addr: Address,
+    contract_addr: Address,
+    client: DaoContractClient<'a>,
+}
+
+fn setup<'a>() -> TestCtx<'a> {
     let env = Env::default();
     env.mock_all_auths();
-    let contract_id = env.register_contract(None, DaoContract);
-    let client = DaoContractClient::new(&env, &contract_id);
+
+    let token_admin = Address::generate(&env);
+    let token_addr = env.register_stellar_asset_contract(token_admin.clone());
 
     let admin = Address::generate(&env);
-    let token = Address::generate(&env);
     let investment = Address::generate(&env);
+    let contract_addr = env.register_contract(None, DaoContract);
+    let client = DaoContractClient::new(&env, &contract_addr);
 
-    client.initialize(&admin, &token, &investment);
+    client.initialize(&admin, &token_addr, &investment);
 
-    (env, client)
+    TestCtx {
+        env,
+        token_addr,
+        contract_addr,
+        client,
+    }
+}
+
+fn mint(ctx: &TestCtx, to: &Address, amount: i128) {
+    let sac = StellarAssetClient::new(&ctx.env, &ctx.token_addr);
+    sac.mock_all_auths().mint(to, &amount);
+}
+
+fn approve(ctx: &TestCtx, from: &Address, amount: i128) {
+    let token = TokenClient::new(&ctx.env, &ctx.token_addr);
+    let max_ttl = ctx.env.ledger().sequence() + 100;
+    token
+        .mock_all_auths()
+        .approve(from, &ctx.contract_addr, &amount, &max_ttl);
 }
 
 #[test]
 fn test_initialize() {
-    let (_env, _client) = setup_env();
+    let _ctx = setup();
 }
 
 #[test]
 fn test_lock_and_unlock_tokens() {
-    let (env, client) = setup_env();
+    let ctx = setup();
+    let user = Address::generate(&ctx.env);
 
-    let user = Address::generate(&env);
+    mint(&ctx, &user, 1000);
+    approve(&ctx, &user, 1000);
 
-    client.lock_tokens(&user, &1000i128);
+    ctx.client.lock_tokens(&user, &1000i128);
 
-    let balance = client.get_token_balance(&user);
+    let balance = ctx.client.get_token_balance(&user);
     assert_eq!(balance, 1000);
 
-    client.unlock_tokens(&user);
+    ctx.client.unlock_tokens(&user);
 
-    let balance = client.get_token_balance(&user);
+    let balance = ctx.client.get_token_balance(&user);
     assert_eq!(balance, 0);
 }
 
 #[test]
 fn test_create_proposal() {
-    let (env, client) = setup_env();
+    let ctx = setup();
+    let proposer = Address::generate(&ctx.env);
+    let title = String::from_str(&ctx.env, "Fund Rice Farm");
+    let desc = String::from_str(&ctx.env, "Proposal to fund rice farming operations");
+    let ends_at = ctx.env.ledger().timestamp() + 86400;
 
-    let proposer = Address::generate(&env);
-    let title = String::from_str(&env, "Fund Rice Farm");
-    let desc = String::from_str(&env, "Proposal to fund rice farming operations");
-    let ends_at = env.ledger().timestamp() + 86400;
+    ctx.client
+        .create_proposal(&proposer, &title, &desc, &100i128, &ends_at);
 
-    client.create_proposal(&proposer, &title, &desc, &100i128, &ends_at);
-
-    let proposal = client.get_proposal(&1u32);
+    let proposal = ctx.client.get_proposal(&1u32);
     assert_eq!(proposal.title, title);
     assert_eq!(proposal.required_votes, 100);
 }
 
 #[test]
 fn test_vote_proposal() {
-    let (env, client) = setup_env();
+    let ctx = setup();
+    let proposer = Address::generate(&ctx.env);
+    let voter = Address::generate(&ctx.env);
+    let title = String::from_str(&ctx.env, "Fund Rice Farm");
+    let desc = String::from_str(&ctx.env, "Proposal to fund rice farming operations");
+    let ends_at = ctx.env.ledger().timestamp() + 86400;
 
-    let proposer = Address::generate(&env);
-    let voter = Address::generate(&env);
-    let title = String::from_str(&env, "Fund Rice Farm");
-    let desc = String::from_str(&env, "Proposal to fund rice farming operations");
-    let ends_at = env.ledger().timestamp() + 86400;
+    mint(&ctx, &voter, 1000);
+    approve(&ctx, &voter, 1000);
+    ctx.client.lock_tokens(&voter, &1000i128);
 
-    client.lock_tokens(&voter, &1000i128);
-    client.create_proposal(&proposer, &title, &desc, &100i128, &ends_at);
-    client.vote_proposal(&voter, &1u32, &VoteData::Accept);
+    ctx.client
+        .create_proposal(&proposer, &title, &desc, &100i128, &ends_at);
+    ctx.client.vote_proposal(&voter, &1u32, &VoteData::Accept);
 
-    let proposal = client.get_proposal(&1u32);
+    let proposal = ctx.client.get_proposal(&1u32);
     assert!(proposal.accept_votes > 0);
 }
 
 #[test]
 fn test_delegate() {
-    let (env, client) = setup_env();
+    let ctx = setup();
+    let delegator = Address::generate(&ctx.env);
+    let delegatee = Address::generate(&ctx.env);
 
-    let delegator = Address::generate(&env);
-    let delegatee = Address::generate(&env);
+    ctx.client.delegate(&delegator, &delegatee);
 
-    client.delegate(&delegator, &delegatee);
-
-    let d = client.get_delegate(&delegator);
+    let d = ctx.client.get_delegate(&delegator);
     assert_eq!(d, delegatee);
 }
 
 #[test]
 fn test_create_challenge() {
-    let (env, client) = setup_env();
+    let ctx = setup();
+    let proposer = Address::generate(&ctx.env);
+    let challenger = Address::generate(&ctx.env);
+    let title = String::from_str(&ctx.env, "Fund Rice Farm");
+    let desc = String::from_str(&ctx.env, "Proposal to fund rice farming operations");
+    let ends_at = ctx.env.ledger().timestamp() + 86400;
 
-    let proposer = Address::generate(&env);
-    let challenger = Address::generate(&env);
-    let title = String::from_str(&env, "Fund Rice Farm");
-    let desc = String::from_str(&env, "Proposal to fund rice farming operations");
-    let ends_at = env.ledger().timestamp() + 86400;
+    ctx.client
+        .create_proposal(&proposer, &title, &desc, &100i128, &ends_at);
 
-    client.create_proposal(&proposer, &title, &desc, &100i128, &ends_at);
+    let chall_desc = String::from_str(&ctx.env, "This proposal is invalid");
+    ctx.client.create_challenge(&challenger, &1u32, &chall_desc);
 
-    let chall_desc = String::from_str(&env, "This proposal is invalid");
-    client.create_challenge(&challenger, &1u32, &chall_desc);
-
-    let challenge = client.get_challenge(&1u32);
+    let challenge = ctx.client.get_challenge(&1u32);
     assert_eq!(challenge.proposal_id, 1);
     assert!(!challenge.resolved);
 }
 
 #[test]
 fn test_dispute_flow() {
-    let (env, client) = setup_env();
+    let ctx = setup();
+    let proposer = Address::generate(&ctx.env);
+    let challenger = Address::generate(&ctx.env);
+    let arbitrator = Address::generate(&ctx.env);
+    let title = String::from_str(&ctx.env, "Fund Rice Farm");
+    let desc = String::from_str(&ctx.env, "Proposal to fund rice farming operations");
+    let ends_at = ctx.env.ledger().timestamp() + 86400;
 
-    let proposer = Address::generate(&env);
-    let challenger = Address::generate(&env);
-    let arbitrator = Address::generate(&env);
-    let title = String::from_str(&env, "Fund Rice Farm");
-    let desc = String::from_str(&env, "Proposal to fund rice farming operations");
-    let ends_at = env.ledger().timestamp() + 86400;
+    ctx.client
+        .create_proposal(&proposer, &title, &desc, &100i128, &ends_at);
 
-    client.create_proposal(&proposer, &title, &desc, &100i128, &ends_at);
+    let chall_desc = String::from_str(&ctx.env, "Invalid proposal");
+    ctx.client.create_challenge(&challenger, &1u32, &chall_desc);
+    ctx.client.initiate_dispute(&challenger, &1u32, &arbitrator);
 
-    let chall_desc = String::from_str(&env, "Invalid proposal");
-    client.create_challenge(&challenger, &1u32, &chall_desc);
-    client.initiate_dispute(&challenger, &1u32, &arbitrator);
-
-    let dispute = client.get_dispute(&1u32);
+    let dispute = ctx.client.get_dispute(&1u32);
     assert_eq!(dispute.arbitrator, arbitrator);
     assert!(!dispute.resolved);
 
-    client.resolve_dispute(&arbitrator, &1u32, &true);
+    ctx.client.resolve_dispute(&arbitrator, &1u32, &true);
 
-    let dispute = client.get_dispute(&1u32);
+    let dispute = ctx.client.get_dispute(&1u32);
     assert!(dispute.resolved);
     assert!(dispute.ruling);
 }
