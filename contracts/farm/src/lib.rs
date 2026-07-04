@@ -5,7 +5,7 @@ mod storage;
 mod types;
 
 use errors::FarmError;
-use types::{Farmer, FarmProduct, Review};
+use types::{FarmProduct, Farmer, Review};
 
 use soroban_sdk::{contract, contractimpl, Address, Env, String, Symbol, Vec};
 
@@ -18,12 +18,24 @@ impl FarmContract {
         if env.storage().instance().has(&Symbol::new(&env, "admin")) {
             panic!("{:?}", FarmError::AlreadyInitialized);
         }
-        env.storage().instance().set(&Symbol::new(&env, "admin"), &admin);
-        env.storage().instance().set(&Symbol::new(&env, "token"), &token);
-        env.storage().instance().set(&Symbol::new(&env, "escrow"), &escrow);
-        env.storage().instance().set(&Symbol::new(&env, "farm_ctr"), &0u32);
-        env.storage().instance().set(&Symbol::new(&env, "prod_ctr"), &0u32);
-        env.storage().instance().set(&Symbol::new(&env, "total_sales"), &0i128);
+        env.storage()
+            .instance()
+            .set(&Symbol::new(&env, "admin"), &admin);
+        env.storage()
+            .instance()
+            .set(&Symbol::new(&env, "token"), &token);
+        env.storage()
+            .instance()
+            .set(&Symbol::new(&env, "escrow"), &escrow);
+        env.storage()
+            .instance()
+            .set(&Symbol::new(&env, "farm_ctr"), &0u32);
+        env.storage()
+            .instance()
+            .set(&Symbol::new(&env, "prod_ctr"), &0u32);
+        env.storage()
+            .instance()
+            .set(&Symbol::new(&env, "total_sales"), &0i128);
     }
 
     pub fn register_farm(
@@ -187,7 +199,9 @@ impl FarmContract {
             .persistent()
             .set(&global_key, &(caller.clone(), local_index));
 
-        env.storage().persistent().set(&count_key, &(local_index + 1));
+        env.storage()
+            .persistent()
+            .set(&count_key, &(local_index + 1));
 
         env.storage()
             .instance()
@@ -399,9 +413,7 @@ impl FarmContract {
         }
         let last_key = (Symbol::new(&env, "cart"), caller.clone(), last_idx);
         env.storage().temporary().remove(&last_key);
-        env.storage()
-            .temporary()
-            .set(&cart_count_key, &(count - 1));
+        env.storage().temporary().set(&cart_count_key, &(count - 1));
     }
 
     pub fn get_purchased_products(env: Env, buyer: Address) -> Vec<FarmProduct> {
@@ -410,7 +422,11 @@ impl FarmContract {
         let mut items = Vec::new(&env);
         for i in 0..count {
             let p_prod_key = (Symbol::new(&env, "p_prod"), buyer.clone(), i);
-            if let Some(p) = env.storage().persistent().get::<_, FarmProduct>(&p_prod_key) {
+            if let Some(p) = env
+                .storage()
+                .persistent()
+                .get::<_, FarmProduct>(&p_prod_key)
+            {
                 items.push_back(p);
             }
         }
@@ -419,19 +435,32 @@ impl FarmContract {
 
     pub fn has_purchased(env: Env, buyer: Address, product_id: u32) -> bool {
         let purchase_key = (Symbol::new(&env, "purch"), buyer, product_id);
-        env.storage().persistent().get(&purchase_key).unwrap_or(false)
+        env.storage()
+            .persistent()
+            .get(&purchase_key)
+            .unwrap_or(false)
     }
 
     pub fn submit_review(env: Env, caller: Address, product_id: u32, review_text: String) {
         caller.require_auth();
 
         let purchase_key = (Symbol::new(&env, "purch"), caller.clone(), product_id);
-        if !env.storage().persistent().get::<_, bool>(&purchase_key).unwrap_or(false) {
+        if !env
+            .storage()
+            .persistent()
+            .get::<_, bool>(&purchase_key)
+            .unwrap_or(false)
+        {
             panic!("{:?}", FarmError::OnlyBuyersCanReview);
         }
 
         let has_rev_key = (Symbol::new(&env, "has_rev"), product_id, caller.clone());
-        if env.storage().persistent().get::<_, bool>(&has_rev_key).unwrap_or(false) {
+        if env
+            .storage()
+            .persistent()
+            .get::<_, bool>(&has_rev_key)
+            .unwrap_or(false)
+        {
             panic!("{:?}", FarmError::AlreadyReviewed);
         }
 
@@ -445,7 +474,9 @@ impl FarmContract {
 
         let rev_key = (Symbol::new(&env, "rev"), product_id, rev_idx);
         env.storage().persistent().set(&rev_key, &review);
-        env.storage().persistent().set(&rev_count_key, &(rev_idx + 1));
+        env.storage()
+            .persistent()
+            .set(&rev_count_key, &(rev_idx + 1));
         env.storage().persistent().set(&has_rev_key, &true);
 
         env.events().publish(
