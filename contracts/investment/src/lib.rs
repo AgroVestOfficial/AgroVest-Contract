@@ -7,7 +7,7 @@ mod types;
 use errors::InvestmentError;
 use types::{FarmInvestmentDetails, Investor};
 
-use soroban_sdk::{contract, contractimpl, Address, Env, String, Symbol, Vec};
+use soroban_sdk::{contract, contractimpl, token::TokenClient, Address, Env, String, Symbol, Vec};
 
 #[contract]
 pub struct InvestmentContract;
@@ -19,9 +19,15 @@ impl InvestmentContract {
         if env.storage().instance().has(&Symbol::new(&env, "token")) {
             panic!("{:?}", InvestmentError::AlreadyInitialized);
         }
-        env.storage().instance().set(&Symbol::new(&env, "token"), &token);
-        env.storage().instance().set(&Symbol::new(&env, "total"), &0i128);
-        env.storage().instance().set(&Symbol::new(&env, "inv_ctr"), &0u32);
+        env.storage()
+            .instance()
+            .set(&Symbol::new(&env, "token"), &token);
+        env.storage()
+            .instance()
+            .set(&Symbol::new(&env, "total"), &0i128);
+        env.storage()
+            .instance()
+            .set(&Symbol::new(&env, "inv_ctr"), &0u32);
     }
 
     /// Create a new investment opportunity for a farm.
@@ -89,11 +95,7 @@ impl InvestmentContract {
             .unwrap_or_else(|| panic!("{:?}", InvestmentError::InvestmentNotFound));
 
         let active_key = (Symbol::new(&env, "active"), farm_id);
-        let active: bool = env
-            .storage()
-            .persistent()
-            .get(&active_key)
-            .unwrap_or(false);
+        let active: bool = env.storage().persistent().get(&active_key).unwrap_or(false);
         if !active {
             panic!("{:?}", InvestmentError::InvestmentNotActive);
         }
@@ -101,6 +103,15 @@ impl InvestmentContract {
         if amount < investment.min_amount {
             panic!("{:?}", InvestmentError::AmountBelowMinimum);
         }
+
+        let token: Address = env
+            .storage()
+            .instance()
+            .get(&Symbol::new(&env, "token"))
+            .unwrap();
+        let contract_addr = env.current_contract_address();
+        let token_client = TokenClient::new(&env, &token);
+        token_client.transfer_from(&contract_addr, &caller, &contract_addr, &amount);
 
         // Record investor
         let inv_count: u32 = env
@@ -120,7 +131,11 @@ impl InvestmentContract {
 
         // Farm-specific investor
         let f_inv_count_key = (Symbol::new(&env, "f_inv_c"), farm_id);
-        let f_count: u32 = env.storage().persistent().get(&f_inv_count_key).unwrap_or(0);
+        let f_count: u32 = env
+            .storage()
+            .persistent()
+            .get(&f_inv_count_key)
+            .unwrap_or(0);
         let f_inv_key = (Symbol::new(&env, "f_inv"), farm_id, f_count);
         env.storage().persistent().set(&f_inv_key, &investor);
         env.storage()
@@ -168,11 +183,7 @@ impl InvestmentContract {
             .unwrap_or_else(|| panic!("{:?}", InvestmentError::InvestmentNotFound));
 
         let active_key = (Symbol::new(&env, "active"), id);
-        let active: bool = env
-            .storage()
-            .persistent()
-            .get(&active_key)
-            .unwrap_or(false);
+        let active: bool = env.storage().persistent().get(&active_key).unwrap_or(false);
         if !active {
             panic!("{:?}", InvestmentError::InvestmentNotActive);
         }
@@ -190,13 +201,14 @@ impl InvestmentContract {
             panic!("{:?}", InvestmentError::NothingToClaim);
         }
 
-        // Transfer raised amount to owner
-        let _token: Address = env
+        let token: Address = env
             .storage()
             .instance()
             .get(&Symbol::new(&env, "token"))
             .unwrap();
-        // In production: token.transfer(contract, caller, amount_raised)
+        let contract_addr = env.current_contract_address();
+        let token_client = TokenClient::new(&env, &token);
+        token_client.transfer(&contract_addr, &caller, &investment.amount_raised);
 
         let claimed = investment.amount_raised;
         investment.amount_raised = 0;
@@ -219,9 +231,8 @@ impl InvestmentContract {
             .persistent()
             .get(&Symbol::new(&env, "inv_count"))
             .unwrap_or(0);
-        let investors = Vec::new(&env);
         // TODO: iterate all farms to collect investors
-        investors
+        Vec::new(&env)
     }
 
     /// Get all investable farms.
@@ -260,11 +271,7 @@ impl InvestmentContract {
         let mut investors = Vec::new(&env);
         for i in 0..count {
             let f_inv_key = (Symbol::new(&env, "f_inv"), farm_id, i);
-            if let Some(inv) = env
-                .storage()
-                .persistent()
-                .get::<_, Investor>(&f_inv_key)
-            {
+            if let Some(inv) = env.storage().persistent().get::<_, Investor>(&f_inv_key) {
                 investors.push_back(inv);
             }
         }
