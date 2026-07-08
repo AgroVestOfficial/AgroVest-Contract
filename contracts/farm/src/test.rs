@@ -1,5 +1,5 @@
-use soroban_sdk::{Address, Env, String};
 use soroban_sdk::testutils::Address as _;
+use soroban_sdk::{Address, Env, String};
 
 use crate::{FarmContract, FarmContractClient};
 
@@ -45,7 +45,13 @@ fn test_register_farm() {
     let email = String::from_str(&env, "abel@test.com");
 
     client.register_farm(
-        &farmer_addr, &name, &image, &location, &contact, &farmer_addr, &email,
+        &farmer_addr,
+        &name,
+        &image,
+        &location,
+        &contact,
+        &farmer_addr,
+        &email,
     );
 
     let farm_index = client.get_farm_index(&name);
@@ -69,7 +75,13 @@ fn test_register_farm_empty_name() {
     let email = String::from_str(&env, "abel@test.com");
 
     client.register_farm(
-        &farmer_addr, &name, &image, &location, &contact, &farmer_addr, &email,
+        &farmer_addr,
+        &name,
+        &image,
+        &location,
+        &contact,
+        &farmer_addr,
+        &email,
     );
 }
 
@@ -85,7 +97,13 @@ fn test_add_farm_product() {
     let email = String::from_str(&env, "abel@test.com");
 
     client.register_farm(
-        &farmer_addr, &name, &image, &location, &contact, &farmer_addr, &email,
+        &farmer_addr,
+        &name,
+        &image,
+        &location,
+        &contact,
+        &farmer_addr,
+        &email,
     );
 
     let prod_name = String::from_str(&env, "Rice");
@@ -93,7 +111,13 @@ fn test_add_farm_product() {
     let prod_desc = String::from_str(&env, "Fresh rice");
     let prod_price = 100i128;
 
-    client.add_farm_product(&farmer_addr, &prod_name, &prod_image, &prod_desc, &prod_price);
+    client.add_farm_product(
+        &farmer_addr,
+        &prod_name,
+        &prod_image,
+        &prod_desc,
+        &prod_price,
+    );
 
     let products = client.get_farm_products(&farmer_addr);
     assert_eq!(products.len(), 1);

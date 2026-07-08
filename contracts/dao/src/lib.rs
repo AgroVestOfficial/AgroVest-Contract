@@ -7,7 +7,9 @@ mod types;
 use errors::DaoError;
 use types::{ChallengeData, DisputeData, ProposalData, VoteData, Votes};
 
-use soroban_sdk::{contract, contractimpl, vec, Address, Env, IntoVal, String, Symbol};
+use soroban_sdk::{
+    contract, contractimpl, token::TokenClient, vec, Address, Env, IntoVal, String, Symbol,
+};
 
 #[contract]
 pub struct DaoContract;
@@ -19,12 +21,24 @@ impl DaoContract {
         if env.storage().instance().has(&Symbol::new(&env, "admin")) {
             panic!("{:?}", DaoError::AlreadyInitialized);
         }
-        env.storage().instance().set(&Symbol::new(&env, "admin"), &admin);
-        env.storage().instance().set(&Symbol::new(&env, "token"), &token);
-        env.storage().instance().set(&Symbol::new(&env, "investment"), &investment);
-        env.storage().instance().set(&Symbol::new(&env, "prop_ctr"), &0u32);
-        env.storage().instance().set(&Symbol::new(&env, "chall_ctr"), &0u32);
-        env.storage().instance().set(&Symbol::new(&env, "disp_ctr"), &0u32);
+        env.storage()
+            .instance()
+            .set(&Symbol::new(&env, "admin"), &admin);
+        env.storage()
+            .instance()
+            .set(&Symbol::new(&env, "token"), &token);
+        env.storage()
+            .instance()
+            .set(&Symbol::new(&env, "investment"), &investment);
+        env.storage()
+            .instance()
+            .set(&Symbol::new(&env, "prop_ctr"), &0u32);
+        env.storage()
+            .instance()
+            .set(&Symbol::new(&env, "chall_ctr"), &0u32);
+        env.storage()
+            .instance()
+            .set(&Symbol::new(&env, "disp_ctr"), &0u32);
     }
 
     /// Lock tokens for voting power.
@@ -34,7 +48,14 @@ impl DaoContract {
         let locked_key = (Symbol::new(&env, "locked"), caller.clone());
         env.storage().persistent().set(&locked_key, &amount);
 
-        // In production: token.transfer_from(caller, contract, amount)
+        let token: Address = env
+            .storage()
+            .instance()
+            .get(&Symbol::new(&env, "token"))
+            .unwrap();
+        let contract_addr = env.current_contract_address();
+        let token_client = TokenClient::new(&env, &token);
+        token_client.transfer_from(&contract_addr, &caller, &contract_addr, &amount);
 
         env.events().publish(
             (Symbol::new(&env, "dao"), Symbol::new(&env, "token_locked")),
@@ -47,21 +68,27 @@ impl DaoContract {
         caller.require_auth();
 
         let locked_key = (Symbol::new(&env, "locked"), caller.clone());
-        let amount: i128 = env
-            .storage()
-            .persistent()
-            .get(&locked_key)
-            .unwrap_or(0);
+        let amount: i128 = env.storage().persistent().get(&locked_key).unwrap_or(0);
 
         if amount == 0 {
             panic!("{:?}", DaoError::NoTokenLocked);
         }
 
-        // In production: token.transfer(contract, caller, amount)
+        let token: Address = env
+            .storage()
+            .instance()
+            .get(&Symbol::new(&env, "token"))
+            .unwrap();
+        let contract_addr = env.current_contract_address();
+        let token_client = TokenClient::new(&env, &token);
+        token_client.transfer(&contract_addr, &caller, &amount);
         env.storage().persistent().remove(&locked_key);
 
         env.events().publish(
-            (Symbol::new(&env, "dao"), Symbol::new(&env, "token_unlocked")),
+            (
+                Symbol::new(&env, "dao"),
+                Symbol::new(&env, "token_unlocked"),
+            ),
             (amount, caller),
         );
     }
@@ -129,11 +156,7 @@ impl DaoContract {
     /// Calculate voting power (integer square root of locked tokens).
     pub fn calculate_voting_power(env: Env, user: Address) -> i128 {
         let locked_key = (Symbol::new(&env, "locked"), user);
-        let amount: i128 = env
-            .storage()
-            .persistent()
-            .get(&locked_key)
-            .unwrap_or(0);
+        let amount: i128 = env.storage().persistent().get(&locked_key).unwrap_or(0);
 
         if amount == 0 {
             panic!("{:?}", DaoError::NoTokenLocked);
@@ -150,16 +173,16 @@ impl DaoContract {
     }
 
     /// Vote on a proposal.
-    pub fn vote_proposal(
-        env: Env,
-        caller: Address,
-        proposal_id: u32,
-        vote: VoteData,
-    ) {
+    pub fn vote_proposal(env: Env, caller: Address, proposal_id: u32, vote: VoteData) {
         caller.require_auth();
 
         let voted_key = (Symbol::new(&env, "voted"), proposal_id, caller.clone());
-        if env.storage().persistent().get::<_, bool>(&voted_key).unwrap_or(false) {
+        if env
+            .storage()
+            .persistent()
+            .get::<_, bool>(&voted_key)
+            .unwrap_or(false)
+        {
             panic!("{:?}", DaoError::AlreadyVoted);
         }
 
@@ -242,7 +265,12 @@ impl DaoContract {
             .unwrap_or_else(|| panic!("{:?}", DaoError::ProposalNotFound));
 
         let tally_key = (Symbol::new(&env, "tally"), proposal_id);
-        if !env.storage().persistent().get::<_, bool>(&tally_key).unwrap_or(false) {
+        if !env
+            .storage()
+            .persistent()
+            .get::<_, bool>(&tally_key)
+            .unwrap_or(false)
+        {
             panic!("{:?}", DaoError::VotesNotTallied);
         }
 
@@ -277,7 +305,10 @@ impl DaoContract {
         env.storage().persistent().set(&prop_key, &proposal);
 
         env.events().publish(
-            (Symbol::new(&env, "dao"), Symbol::new(&env, "proposal_executed")),
+            (
+                Symbol::new(&env, "dao"),
+                Symbol::new(&env, "proposal_executed"),
+            ),
             (proposal_id, farm_id, proposal.proposer),
         );
     }
@@ -330,12 +361,7 @@ impl DaoContract {
     }
 
     /// Create a challenge against a proposal.
-    pub fn create_challenge(
-        env: Env,
-        caller: Address,
-        proposal_id: u32,
-        description: String,
-    ) {
+    pub fn create_challenge(env: Env, caller: Address, proposal_id: u32, description: String) {
         caller.require_auth();
 
         if description.is_empty() {
@@ -373,18 +399,16 @@ impl DaoContract {
         env.storage().persistent().set(&prop_key, &proposal);
 
         env.events().publish(
-            (Symbol::new(&env, "dao"), Symbol::new(&env, "challenge_created")),
+            (
+                Symbol::new(&env, "dao"),
+                Symbol::new(&env, "challenge_created"),
+            ),
             (chall_counter, proposal_id, caller),
         );
     }
 
     /// Resolve a challenge.
-    pub fn resolve_challenge(
-        env: Env,
-        caller: Address,
-        challenge_id: u32,
-        valid: bool,
-    ) {
+    pub fn resolve_challenge(env: Env, caller: Address, challenge_id: u32, valid: bool) {
         caller.require_auth();
 
         let chall_key = (Symbol::new(&env, "chall"), challenge_id);
@@ -402,7 +426,10 @@ impl DaoContract {
         env.storage().persistent().set(&chall_key, &challenge);
 
         env.events().publish(
-            (Symbol::new(&env, "dao"), Symbol::new(&env, "challenge_resolved")),
+            (
+                Symbol::new(&env, "dao"),
+                Symbol::new(&env, "challenge_resolved"),
+            ),
             (challenge_id, valid),
         );
     }
@@ -417,12 +444,7 @@ impl DaoContract {
     }
 
     /// Initiate a dispute for a challenge.
-    pub fn initiate_dispute(
-        env: Env,
-        caller: Address,
-        challenge_id: u32,
-        arbitrator: Address,
-    ) {
+    pub fn initiate_dispute(env: Env, caller: Address, challenge_id: u32, arbitrator: Address) {
         caller.require_auth();
 
         let mut disp_counter: u32 = env
@@ -446,7 +468,10 @@ impl DaoContract {
             .set(&Symbol::new(&env, "disp_ctr"), &disp_counter);
 
         env.events().publish(
-            (Symbol::new(&env, "dao"), Symbol::new(&env, "dispute_initiated")),
+            (
+                Symbol::new(&env, "dao"),
+                Symbol::new(&env, "dispute_initiated"),
+            ),
             (disp_counter, challenge_id, caller),
         );
     }
@@ -475,7 +500,10 @@ impl DaoContract {
         env.storage().persistent().set(&disp_key, &dispute);
 
         env.events().publish(
-            (Symbol::new(&env, "dao"), Symbol::new(&env, "dispute_resolved")),
+            (
+                Symbol::new(&env, "dao"),
+                Symbol::new(&env, "dispute_resolved"),
+            ),
             (dispute_id, ruling),
         );
     }

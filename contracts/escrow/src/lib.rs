@@ -7,7 +7,7 @@ mod types;
 use errors::EscrowError;
 use types::{Escrow, EscrowStatus};
 
-use soroban_sdk::{contract, contractimpl, Address, Env, Symbol};
+use soroban_sdk::{contract, contractimpl, token::TokenClient, Address, Env, Symbol};
 
 #[contract]
 pub struct EscrowContract;
@@ -19,31 +19,29 @@ impl EscrowContract {
         if env.storage().instance().has(&Symbol::new(&env, "admin")) {
             panic!("{:?}", EscrowError::AlreadyInitialized);
         }
-        env.storage().instance().set(&Symbol::new(&env, "admin"), &admin);
-        env.storage().instance().set(&Symbol::new(&env, "token"), &token);
-        env.storage().instance().set(&Symbol::new(&env, "escrow_ctr"), &0u32);
+        env.storage()
+            .instance()
+            .set(&Symbol::new(&env, "admin"), &admin);
+        env.storage()
+            .instance()
+            .set(&Symbol::new(&env, "token"), &token);
+        env.storage()
+            .instance()
+            .set(&Symbol::new(&env, "escrow_ctr"), &0u32);
     }
 
     /// Create an escrow. Buyer deposits tokens.
-    pub fn create_escrow(
-        env: Env,
-        buyer: Address,
-        farmer: Address,
-        order_id: u32,
-        amount: i128,
-    ) {
+    pub fn create_escrow(env: Env, buyer: Address, farmer: Address, order_id: u32, amount: i128) {
         buyer.require_auth();
 
-        let _token: Address = env
+        let token: Address = env
             .storage()
             .instance()
             .get(&Symbol::new(&env, "token"))
             .unwrap();
-
-        // Transfer tokens from buyer to this contract
-        let _contract_addr = env.current_contract_address();
-        // Note: In production, this would call token.transfer_from(buyer, contract, amount)
-        // For now, we record the escrow state.
+        let contract_addr = env.current_contract_address();
+        let token_client = TokenClient::new(&env, &token);
+        token_client.transfer_from(&contract_addr, &buyer, &contract_addr, &amount);
 
         let mut escrow_counter: u32 = env
             .storage()
@@ -90,19 +88,23 @@ impl EscrowContract {
             panic!("{:?}", EscrowError::InvalidStatus);
         }
 
-        // Transfer tokens to farmer
-        let _token: Address = env
+        let token: Address = env
             .storage()
             .instance()
             .get(&Symbol::new(&env, "token"))
             .unwrap();
-        // In production: token.transfer(contract, farmer, amount)
+        let contract_addr = env.current_contract_address();
+        let token_client = TokenClient::new(&env, &token);
+        token_client.transfer(&contract_addr, &escrow.farmer, &escrow.amount);
 
         escrow.status = EscrowStatus::Complete;
         env.storage().persistent().set(&escrow_key, &escrow);
 
         env.events().publish(
-            (Symbol::new(&env, "escrow"), Symbol::new(&env, "delivery_approved")),
+            (
+                Symbol::new(&env, "escrow"),
+                Symbol::new(&env, "delivery_approved"),
+            ),
             escrow_id,
         );
         env.events().publish(
@@ -130,7 +132,10 @@ impl EscrowContract {
         env.storage().persistent().set(&escrow_key, &escrow);
 
         env.events().publish(
-            (Symbol::new(&env, "escrow"), Symbol::new(&env, "dispute_raised")),
+            (
+                Symbol::new(&env, "escrow"),
+                Symbol::new(&env, "dispute_raised"),
+            ),
             escrow_id,
         );
     }
@@ -163,19 +168,23 @@ impl EscrowContract {
             panic!("{:?}", EscrowError::InvalidWinner);
         }
 
-        // Transfer tokens to winner
-        let _token: Address = env
+        let token: Address = env
             .storage()
             .instance()
             .get(&Symbol::new(&env, "token"))
             .unwrap();
-        // In production: token.transfer(contract, winner, amount)
+        let contract_addr = env.current_contract_address();
+        let token_client = TokenClient::new(&env, &token);
+        token_client.transfer(&contract_addr, &winner, &escrow.amount);
 
         escrow.status = EscrowStatus::Complete;
         env.storage().persistent().set(&escrow_key, &escrow);
 
         env.events().publish(
-            (Symbol::new(&env, "escrow"), Symbol::new(&env, "dispute_resolved")),
+            (
+                Symbol::new(&env, "escrow"),
+                Symbol::new(&env, "dispute_resolved"),
+            ),
             (escrow_id, winner),
         );
     }
