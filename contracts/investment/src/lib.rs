@@ -226,13 +226,24 @@ impl InvestmentContract {
 
     /// Get all investors.
     pub fn get_all_investors(env: Env) -> Vec<Investor> {
-        let _inv_count: u32 = env
+        let mut investors = Vec::new(&env);
+        // Iterate all farm investments and collect their investors.
+        let inv_ctr: u32 = env
             .storage()
-            .persistent()
-            .get(&Symbol::new(&env, "inv_count"))
+            .instance()
+            .get(&Symbol::new(&env, "inv_ctr"))
             .unwrap_or(0);
-        // TODO: iterate all farms to collect investors
-        Vec::new(&env)
+        for farm_id in 1..=inv_ctr {
+            let f_count_key = (Symbol::new(&env, "f_inv_c"), farm_id);
+            let count: u32 = env.storage().persistent().get(&f_count_key).unwrap_or(0);
+            for i in 0..count {
+                let f_inv_key = (Symbol::new(&env, "f_inv"), farm_id, i);
+                if let Some(inv) = env.storage().persistent().get::<_, Investor>(&f_inv_key) {
+                    investors.push_back(inv);
+                }
+            }
+        }
+        investors
     }
 
     /// Get all investable farms.

@@ -162,3 +162,35 @@ fn test_claim_after_end_date_transfers_to_owner() {
     let investment = ctx.client.get_all_investable_farms().get(0).unwrap();
     assert_eq!(investment.amount_raised, 0);
 }
+
+#[test]
+fn test_get_all_investors_returns_across_farms() {
+    let ctx = setup();
+    let owner = Address::generate(&ctx.env);
+    let investor1 = Address::generate(&ctx.env);
+    let investor2 = Address::generate(&ctx.env);
+    let name = String::from_str(&ctx.env, "Farm");
+    let about = String::from_str(&ctx.env, "About");
+    let image = String::from_str(&ctx.env, "img.png");
+    let end_date = ctx.env.ledger().timestamp() + 86400;
+
+    // Create two investments
+    ctx.client.create_investment(
+        &1u32, &image, &name, &about, &100i128, &end_date, &owner,
+    );
+    ctx.client.create_investment(
+        &2u32, &image, &name, &about, &100i128, &end_date, &owner,
+    );
+
+    // Invest in both
+    mint(&ctx, &investor1, 1000);
+    mint(&ctx, &investor2, 2000);
+    approve(&ctx, &investor1, 1000);
+    approve(&ctx, &investor2, 2000);
+
+    ctx.client.invest(&investor1, &1u32, &200i128);
+    ctx.client.invest(&investor2, &2u32, &300i128);
+
+    let all = ctx.client.get_all_investors();
+    assert_eq!(all.len(), 2);
+}
