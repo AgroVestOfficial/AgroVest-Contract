@@ -41,6 +41,7 @@ pub struct ChallengeData {
     pub proposal_id: u32,
     pub description: soroban_sdk::String,
     pub resolved: bool,
+    pub valid: bool,
     pub challenger: soroban_sdk::Address,
 }
 
