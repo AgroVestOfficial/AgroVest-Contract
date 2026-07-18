@@ -41,6 +41,8 @@ impl InvestmentContract {
         end_date: u64,
         owner: Address,
     ) {
+        owner.require_auth();
+
         let mut inv_counter: u32 = env
             .storage()
             .instance()

@@ -194,3 +194,22 @@ fn test_get_all_investors_returns_across_farms() {
     let all = ctx.client.get_all_investors();
     assert_eq!(all.len(), 2);
 }
+
+#[test]
+#[should_panic]
+fn test_create_investment_requires_owner_auth() {
+    let env = Env::default();
+    let token_admin = Address::generate(&env);
+    let token_addr = env.register_stellar_asset_contract(token_admin);
+    let contract_addr = env.register_contract(None, InvestmentContract);
+    let client = InvestmentContractClient::new(&env, &contract_addr);
+    client.initialize(&token_addr);
+
+    let owner = Address::generate(&env);
+    let name = String::from_str(&env, "Farm");
+    let about = String::from_str(&env, "About");
+    let image = String::from_str(&env, "img.png");
+    let end_date = env.ledger().timestamp() + 86400;
+
+    client.create_investment(&1u32, &image, &name, &about, &100i128, &end_date, &owner);
+}
