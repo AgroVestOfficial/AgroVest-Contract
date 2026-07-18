@@ -92,6 +92,21 @@ fn test_lock_and_unlock_tokens() {
 }
 
 #[test]
+fn test_lock_tokens_accumulates() {
+    let ctx = setup();
+    let user = Address::generate(&ctx.env);
+
+    mint(&ctx, &user, 1000);
+    approve(&ctx, &user, 1000);
+
+    ctx.client.lock_tokens(&user, &100i128);
+    assert_eq!(ctx.client.get_token_balance(&user), 100);
+
+    ctx.client.lock_tokens(&user, &50i128);
+    assert_eq!(ctx.client.get_token_balance(&user), 150);
+}
+
+#[test]
 fn test_create_proposal() {
     let ctx = setup();
     let proposer = Address::generate(&ctx.env);
