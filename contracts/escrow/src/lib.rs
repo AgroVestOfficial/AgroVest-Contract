@@ -70,6 +70,36 @@ impl EscrowContract {
         );
     }
 
+    /// Confirm delivery. Only buyer can call. Transitions AwaitingDelivery -> AwaitingApproval.
+    pub fn confirm_delivery(env: Env, caller: Address, escrow_id: u32) {
+        caller.require_auth();
+
+        let escrow_key = (Symbol::new(&env, "escrow"), escrow_id);
+        let mut escrow: Escrow = env
+            .storage()
+            .persistent()
+            .get(&escrow_key)
+            .unwrap_or_else(|| panic!("{:?}", EscrowError::EscrowNotFound));
+
+        if escrow.buyer != caller {
+            panic!("{:?}", EscrowError::OnlyBuyerCanConfirm);
+        }
+        if escrow.status != EscrowStatus::AwaitingDelivery {
+            panic!("{:?}", EscrowError::InvalidStatus);
+        }
+
+        escrow.status = EscrowStatus::AwaitingApproval;
+        env.storage().persistent().set(&escrow_key, &escrow);
+
+        env.events().publish(
+            (
+                Symbol::new(&env, "escrow"),
+                Symbol::new(&env, "delivery_confirmed"),
+            ),
+            escrow_id,
+        );
+    }
+
     /// Approve delivery. Only buyer can call.
     pub fn approve_delivery(env: Env, caller: Address, escrow_id: u32) {
         caller.require_auth();
