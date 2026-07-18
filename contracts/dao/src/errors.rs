@@ -23,4 +23,5 @@ pub enum DaoError {
     DescriptionCannotBeEmpty = 17,
     TransferFailed = 18,
     InsufficientVotes = 19,
+    NotAdmin = 20,
 }

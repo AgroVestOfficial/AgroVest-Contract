@@ -384,6 +384,7 @@ impl DaoContract {
             proposal_id,
             description,
             resolved: false,
+            valid: false,
             challenger: caller.clone(),
         };
 
@@ -412,9 +413,18 @@ impl DaoContract {
         );
     }
 
-    /// Resolve a challenge.
+    /// Resolve a challenge. Only admin can resolve.
     pub fn resolve_challenge(env: Env, caller: Address, challenge_id: u32, valid: bool) {
         caller.require_auth();
+
+        let admin: Address = env
+            .storage()
+            .instance()
+            .get(&Symbol::new(&env, "admin"))
+            .unwrap();
+        if caller != admin {
+            panic!("{:?}", DaoError::NotAdmin);
+        }
 
         let chall_key = (Symbol::new(&env, "chall"), challenge_id);
         let mut challenge: ChallengeData = env
@@ -428,6 +438,7 @@ impl DaoContract {
         }
 
         challenge.resolved = true;
+        challenge.valid = valid;
         env.storage().persistent().set(&chall_key, &challenge);
 
         env.events().publish(
