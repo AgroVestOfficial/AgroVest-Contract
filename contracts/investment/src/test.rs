@@ -175,12 +175,10 @@ fn test_get_all_investors_returns_across_farms() {
     let end_date = ctx.env.ledger().timestamp() + 86400;
 
     // Create two investments
-    ctx.client.create_investment(
-        &1u32, &image, &name, &about, &100i128, &end_date, &owner,
-    );
-    ctx.client.create_investment(
-        &2u32, &image, &name, &about, &100i128, &end_date, &owner,
-    );
+    ctx.client
+        .create_investment(&1u32, &image, &name, &about, &100i128, &end_date, &owner);
+    ctx.client
+        .create_investment(&2u32, &image, &name, &about, &100i128, &end_date, &owner);
 
     // Invest in both
     mint(&ctx, &investor1, 1000);
