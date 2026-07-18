@@ -279,6 +279,10 @@ impl DaoContract {
             panic!("{:?}", DaoError::ProposalAlreadyExecuted);
         }
 
+        if proposal.accept_votes < proposal.required_votes {
+            panic!("{:?}", DaoError::InsufficientVotes);
+        }
+
         // Cross-contract call to Investment contract
         let investment_addr: Address = env
             .storage()
