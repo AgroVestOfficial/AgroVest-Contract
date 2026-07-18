@@ -47,7 +47,9 @@ impl DaoContract {
         caller.require_auth();
 
         let locked_key = (Symbol::new(&env, "locked"), caller.clone());
-        env.storage().persistent().set(&locked_key, &amount);
+        let existing: i128 = env.storage().persistent().get(&locked_key).unwrap_or(0);
+        let new_amount = existing + amount;
+        env.storage().persistent().set(&locked_key, &new_amount);
 
         let token: Address = env
             .storage()
