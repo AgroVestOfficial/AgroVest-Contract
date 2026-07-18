@@ -72,6 +72,53 @@ fn test_create_escrow_transfers_from_buyer() {
 }
 
 #[test]
+fn test_confirm_delivery_transitions_status() {
+    let ctx = setup();
+    let buyer = Address::generate(&ctx.env);
+    let farmer = Address::generate(&ctx.env);
+
+    mint(&ctx, &buyer, 1000);
+    approve(&ctx, &buyer, 1000);
+    ctx.client.create_escrow(&buyer, &farmer, &1u32, &500i128);
+
+    let escrow = ctx.client.get_escrow_details(&1u32);
+    assert_eq!(escrow.status, EscrowStatus::AwaitingDelivery);
+
+    ctx.client.confirm_delivery(&buyer, &1u32);
+
+    let escrow = ctx.client.get_escrow_details(&1u32);
+    assert_eq!(escrow.status, EscrowStatus::AwaitingApproval);
+}
+
+#[test]
+#[should_panic]
+fn test_confirm_delivery_not_buyer() {
+    let ctx = setup();
+    let buyer = Address::generate(&ctx.env);
+    let farmer = Address::generate(&ctx.env);
+    let other = Address::generate(&ctx.env);
+
+    mint(&ctx, &buyer, 1000);
+    approve(&ctx, &buyer, 1000);
+    ctx.client.create_escrow(&buyer, &farmer, &1u32, &500i128);
+    ctx.client.confirm_delivery(&other, &1u32);
+}
+
+#[test]
+#[should_panic]
+fn test_confirm_delivery_wrong_status() {
+    let ctx = setup();
+    let buyer = Address::generate(&ctx.env);
+    let farmer = Address::generate(&ctx.env);
+
+    mint(&ctx, &buyer, 1000);
+    approve(&ctx, &buyer, 1000);
+    ctx.client.create_escrow(&buyer, &farmer, &1u32, &500i128);
+    ctx.client.confirm_delivery(&buyer, &1u32);
+    ctx.client.confirm_delivery(&buyer, &1u32);
+}
+
+#[test]
 #[should_panic]
 fn test_approve_delivery_not_buyer() {
     let ctx = setup();
@@ -82,6 +129,7 @@ fn test_approve_delivery_not_buyer() {
     mint(&ctx, &buyer, 1000);
     approve(&ctx, &buyer, 1000);
     ctx.client.create_escrow(&buyer, &farmer, &1u32, &500i128);
+    ctx.client.confirm_delivery(&buyer, &1u32);
     ctx.client.approve_delivery(&other, &1u32);
 }
 
@@ -129,11 +177,19 @@ fn test_full_escrow_lifecycle() {
     let escrow = ctx.client.get_escrow_details(&1u32);
     assert_eq!(escrow.status, EscrowStatus::AwaitingDelivery);
 
-    ctx.client.raise_dispute(&buyer, &1u32);
+    ctx.client.confirm_delivery(&buyer, &1u32);
     let escrow = ctx.client.get_escrow_details(&1u32);
-    assert_eq!(escrow.status, EscrowStatus::Dispute);
+    assert_eq!(escrow.status, EscrowStatus::AwaitingApproval);
 
-    ctx.client.resolve_dispute(&ctx.admin, &1u32, &farmer);
+    ctx.client.approve_delivery(&buyer, &1u32);
     let escrow = ctx.client.get_escrow_details(&1u32);
     assert_eq!(escrow.status, EscrowStatus::Complete);
+
+    let token = TokenClient::new(&ctx.env, &ctx.token_addr);
+    let contract_balance = token.balance(&ctx.contract_addr);
+    assert_eq!(contract_balance, 0);
+    let farmer_balance = token.balance(&farmer);
+    assert_eq!(farmer_balance, 500);
+    let buyer_balance = token.balance(&buyer);
+    assert_eq!(buyer_balance, 1500);
 }
