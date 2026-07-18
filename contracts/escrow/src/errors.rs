@@ -14,4 +14,5 @@ pub enum EscrowError {
     TransferFailed = 8,
     AlreadyResolved = 9,
     InvalidWinner = 10,
+    OnlyBuyerCanConfirm = 11,
 }
