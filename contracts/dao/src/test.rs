@@ -27,6 +27,7 @@ struct TestCtx<'a> {
     env: Env,
     token_addr: Address,
     contract_addr: Address,
+    admin: Address,
     client: DaoContractClient<'a>,
 }
 
@@ -48,6 +49,7 @@ fn setup<'a>() -> TestCtx<'a> {
         env,
         token_addr,
         contract_addr,
+        admin,
         client,
     }
 }
@@ -267,4 +269,46 @@ fn test_execute_proposal_sufficient_accept_votes_succeeds() {
 
     let proposal = ctx.client.get_proposal(&1u32);
     assert!(proposal.executed);
+}
+
+#[test]
+#[should_panic(expected = "NotAdmin")]
+fn test_resolve_challenge_non_admin_panics() {
+    let ctx = setup();
+    let proposer = Address::generate(&ctx.env);
+    let challenger = Address::generate(&ctx.env);
+    let non_admin = Address::generate(&ctx.env);
+    let title = String::from_str(&ctx.env, "Fund Rice Farm");
+    let desc = String::from_str(&ctx.env, "Proposal to fund rice farming operations");
+    let ends_at = ctx.env.ledger().timestamp() + 86400;
+
+    ctx.client
+        .create_proposal(&proposer, &title, &desc, &100i128, &ends_at);
+
+    let chall_desc = String::from_str(&ctx.env, "This proposal is invalid");
+    ctx.client.create_challenge(&challenger, &1u32, &chall_desc);
+
+    ctx.client.resolve_challenge(&non_admin, &1u32, &true);
+}
+
+#[test]
+fn test_resolve_challenge_admin_succeeds() {
+    let ctx = setup();
+    let proposer = Address::generate(&ctx.env);
+    let challenger = Address::generate(&ctx.env);
+    let title = String::from_str(&ctx.env, "Fund Rice Farm");
+    let desc = String::from_str(&ctx.env, "Proposal to fund rice farming operations");
+    let ends_at = ctx.env.ledger().timestamp() + 86400;
+
+    ctx.client
+        .create_proposal(&proposer, &title, &desc, &100i128, &ends_at);
+
+    let chall_desc = String::from_str(&ctx.env, "This proposal is invalid");
+    ctx.client.create_challenge(&challenger, &1u32, &chall_desc);
+
+    ctx.client.resolve_challenge(&ctx.admin, &1u32, &true);
+
+    let challenge = ctx.client.get_challenge(&1u32);
+    assert!(challenge.resolved);
+    assert!(challenge.valid);
 }
