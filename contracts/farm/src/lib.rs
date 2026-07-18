@@ -8,7 +8,7 @@ mod types;
 use errors::FarmError;
 use types::{FarmProduct, Farmer, Review};
 
-use soroban_sdk::{contract, contractimpl, Address, Env, String, Symbol, Vec};
+use soroban_sdk::{contract, contractimpl, token::TokenClient, Address, Env, String, Symbol, Vec};
 
 #[contract]
 pub struct FarmContract;
@@ -364,6 +364,14 @@ impl FarmContract {
         if env.storage().persistent().has(&purchase_key) {
             panic!("{:?}", FarmError::AlreadyPurchased);
         }
+
+        let token: Address = env
+            .storage()
+            .instance()
+            .get(&Symbol::new(&env, "token"))
+            .unwrap();
+        let token_client = TokenClient::new(&env, &token);
+        token_client.transfer_from(&env.current_contract_address(), &caller, &owner, &amount);
 
         product.sold = true;
         env.storage().persistent().set(&prod_key, &product);
