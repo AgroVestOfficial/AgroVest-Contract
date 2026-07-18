@@ -22,4 +22,5 @@ pub enum DaoError {
     ProposalNotFound = 16,
     DescriptionCannotBeEmpty = 17,
     TransferFailed = 18,
+    InsufficientVotes = 19,
 }

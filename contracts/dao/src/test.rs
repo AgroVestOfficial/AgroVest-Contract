@@ -1,9 +1,27 @@
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::token::{StellarAssetClient, TokenClient};
-use soroban_sdk::{Address, Env, String};
+use soroban_sdk::{contract, contractimpl, Address, Env, String};
 
 use crate::types::VoteData;
 use crate::{DaoContract, DaoContractClient};
+
+#[contract]
+pub struct MockInvestment;
+
+#[contractimpl]
+impl MockInvestment {
+    pub fn create_investment(
+        _env: Env,
+        _farm_id: u32,
+        _image: String,
+        _name: String,
+        _about: String,
+        _min_amount: i128,
+        _end_date: u64,
+        _owner: Address,
+    ) {
+    }
+}
 
 struct TestCtx<'a> {
     env: Env,
@@ -20,11 +38,11 @@ fn setup<'a>() -> TestCtx<'a> {
     let token_addr = env.register_stellar_asset_contract(token_admin.clone());
 
     let admin = Address::generate(&env);
-    let investment = Address::generate(&env);
+    let investment_addr = env.register_contract(None, MockInvestment);
     let contract_addr = env.register_contract(None, DaoContract);
     let client = DaoContractClient::new(&env, &contract_addr);
 
-    client.initialize(&admin, &token_addr, &investment);
+    client.initialize(&admin, &token_addr, &investment_addr);
 
     TestCtx {
         env,
@@ -166,4 +184,87 @@ fn test_dispute_flow() {
     let dispute = ctx.client.get_dispute(&1u32);
     assert!(dispute.resolved);
     assert!(dispute.ruling);
+}
+
+#[test]
+#[should_panic(expected = "InsufficientVotes")]
+fn test_execute_proposal_reject_votes_fails() {
+    let ctx = setup();
+    let proposer = Address::generate(&ctx.env);
+    let voter = Address::generate(&ctx.env);
+    let title = String::from_str(&ctx.env, "Fund Rice Farm");
+    let desc = String::from_str(&ctx.env, "Proposal to fund rice farming operations");
+    let ends_at = ctx.env.ledger().timestamp() + 86400;
+
+    mint(&ctx, &voter, 1000);
+    approve(&ctx, &voter, 1000);
+    ctx.client.lock_tokens(&voter, &1000i128);
+
+    ctx.client
+        .create_proposal(&proposer, &title, &desc, &100i128, &ends_at);
+    ctx.client.vote_proposal(&voter, &1u32, &VoteData::Reject);
+    ctx.client.tally_votes(&voter, &1u32);
+
+    let name = String::from_str(&ctx.env, "Rice Farm");
+    let about = String::from_str(&ctx.env, "A rice farm");
+    ctx.client
+        .execute_proposal(&proposer, &1u32, &1u32, &name, &about, &100i128, &ends_at);
+}
+
+#[test]
+#[should_panic(expected = "InsufficientVotes")]
+fn test_execute_proposal_insufficient_accept_votes_fails() {
+    let ctx = setup();
+    let proposer = Address::generate(&ctx.env);
+    let voter = Address::generate(&ctx.env);
+    let title = String::from_str(&ctx.env, "Fund Rice Farm");
+    let desc = String::from_str(&ctx.env, "Proposal to fund rice farming operations");
+    let ends_at = ctx.env.ledger().timestamp() + 86400;
+
+    mint(&ctx, &voter, 100);
+    approve(&ctx, &voter, 100);
+    ctx.client.lock_tokens(&voter, &100i128);
+
+    ctx.client
+        .create_proposal(&proposer, &title, &desc, &1000i128, &ends_at);
+    ctx.client.vote_proposal(&voter, &1u32, &VoteData::Accept);
+    ctx.client.tally_votes(&voter, &1u32);
+
+    let proposal = ctx.client.get_proposal(&1u32);
+    assert!(proposal.accept_votes < proposal.required_votes);
+
+    let name = String::from_str(&ctx.env, "Rice Farm");
+    let about = String::from_str(&ctx.env, "A rice farm");
+    ctx.client
+        .execute_proposal(&proposer, &1u32, &1u32, &name, &about, &100i128, &ends_at);
+}
+
+#[test]
+fn test_execute_proposal_sufficient_accept_votes_succeeds() {
+    let ctx = setup();
+    let proposer = Address::generate(&ctx.env);
+    let voter = Address::generate(&ctx.env);
+    let title = String::from_str(&ctx.env, "Fund Rice Farm");
+    let desc = String::from_str(&ctx.env, "Proposal to fund rice farming operations");
+    let ends_at = ctx.env.ledger().timestamp() + 86400;
+
+    mint(&ctx, &voter, 10000);
+    approve(&ctx, &voter, 10000);
+    ctx.client.lock_tokens(&voter, &10000i128);
+
+    ctx.client
+        .create_proposal(&proposer, &title, &desc, &50i128, &ends_at);
+    ctx.client.vote_proposal(&voter, &1u32, &VoteData::Accept);
+    ctx.client.tally_votes(&voter, &1u32);
+
+    let proposal = ctx.client.get_proposal(&1u32);
+    assert!(proposal.accept_votes >= proposal.required_votes);
+
+    let name = String::from_str(&ctx.env, "Rice Farm");
+    let about = String::from_str(&ctx.env, "A rice farm");
+    ctx.client
+        .execute_proposal(&proposer, &1u32, &1u32, &name, &about, &100i128, &ends_at);
+
+    let proposal = ctx.client.get_proposal(&1u32);
+    assert!(proposal.executed);
 }
