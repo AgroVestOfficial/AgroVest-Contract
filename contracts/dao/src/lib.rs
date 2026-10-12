@@ -235,6 +235,11 @@ impl DaoContract {
     pub fn tally_votes(env: Env, caller: Address, proposal_id: u32) {
         caller.require_auth();
 
+        let proposal = Self::get_proposal(env.clone(), proposal_id);
+        if env.ledger().timestamp() < proposal.ends_at {
+            panic!("{:?}", DaoError::ProposalNotEnded);
+        }
+
         let total_key = (Symbol::new(&env, "total_v"), proposal_id);
         let total: i128 = env.storage().persistent().get(&total_key).unwrap_or(0);
 
