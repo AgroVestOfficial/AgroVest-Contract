@@ -1,4 +1,4 @@
-use soroban_sdk::testutils::Address as _;
+use soroban_sdk::testutils::{Address as _, Ledger as _};
 use soroban_sdk::token::{StellarAssetClient, TokenClient};
 use soroban_sdk::{contract, contractimpl, Address, Env, String};
 
@@ -220,12 +220,38 @@ fn test_execute_proposal_reject_votes_fails() {
     ctx.client
         .create_proposal(&proposer, &title, &desc, &100i128, &ends_at);
     ctx.client.vote_proposal(&voter, &1u32, &VoteData::Reject);
+
+    ctx.env.ledger().with_mut(|l| {
+        l.timestamp = ends_at + 1;
+    });
     ctx.client.tally_votes(&voter, &1u32);
 
     let name = String::from_str(&ctx.env, "Rice Farm");
     let about = String::from_str(&ctx.env, "A rice farm");
     ctx.client
         .execute_proposal(&proposer, &1u32, &1u32, &name, &about, &100i128, &ends_at);
+}
+
+#[test]
+#[should_panic(expected = "ProposalNotEnded")]
+fn test_tally_votes_before_end_date_fails() {
+    let ctx = setup();
+    let proposer = Address::generate(&ctx.env);
+    let voter = Address::generate(&ctx.env);
+    let title = String::from_str(&ctx.env, "Fund Rice Farm");
+    let desc = String::from_str(&ctx.env, "Proposal to fund rice farming operations");
+    let ends_at = ctx.env.ledger().timestamp() + 86400;
+
+    mint(&ctx, &voter, 1000);
+    approve(&ctx, &voter, 1000);
+    ctx.client.lock_tokens(&voter, &1000i128);
+
+    ctx.client
+        .create_proposal(&proposer, &title, &desc, &100i128, &ends_at);
+    ctx.client.vote_proposal(&voter, &1u32, &VoteData::Accept);
+
+    // Calling tally_votes before ends_at should panic with ProposalNotEnded
+    ctx.client.tally_votes(&voter, &1u32);
 }
 
 #[test]
@@ -245,6 +271,10 @@ fn test_execute_proposal_insufficient_accept_votes_fails() {
     ctx.client
         .create_proposal(&proposer, &title, &desc, &1000i128, &ends_at);
     ctx.client.vote_proposal(&voter, &1u32, &VoteData::Accept);
+
+    ctx.env.ledger().with_mut(|l| {
+        l.timestamp = ends_at + 1;
+    });
     ctx.client.tally_votes(&voter, &1u32);
 
     let proposal = ctx.client.get_proposal(&1u32);
@@ -272,6 +302,10 @@ fn test_execute_proposal_sufficient_accept_votes_succeeds() {
     ctx.client
         .create_proposal(&proposer, &title, &desc, &50i128, &ends_at);
     ctx.client.vote_proposal(&voter, &1u32, &VoteData::Accept);
+
+    ctx.env.ledger().with_mut(|l| {
+        l.timestamp = ends_at + 1;
+    });
     ctx.client.tally_votes(&voter, &1u32);
 
     let proposal = ctx.client.get_proposal(&1u32);
