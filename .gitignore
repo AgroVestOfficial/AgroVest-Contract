@@ -11,10 +11,8 @@
 /docs/
 
 # Environment
-.env
 
 # IDE
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -25,3 +23,5 @@ Thumbs.db
 
 # Soroban
 .soroban/
+config.bat
+node_modules
